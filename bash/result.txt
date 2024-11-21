@@ -1,0 +1,12 @@
+Long listing of files in .:
+total 36
+-rwxr-xr-x 1 manthankhawse manthankhawse  296 Sep  8 19:06 divisors.sh
+-rwxr-xr-x 1 manthankhawse manthankhawse  238 Sep  8 18:47 gcd.sh
+-rwxr-xr-x 1 manthankhawse manthankhawse  181 Sep  8 18:33 isEligible.sh
+-rwxr-xr-x 1 manthankhawse manthankhawse  404 Sep  8 19:08 leftRotate.sh
+-rwxr-xr-x 1 manthankhawse manthankhawse  536 Sep  8 19:11 longListing.sh
+-rwxr-xr-x 1 manthankhawse manthankhawse  750 Sep  8 18:42 parityCheck.sh
+-rw-r--r-- 1 manthankhawse manthankhawse   28 Sep  8 19:11 result.txt
+-rwxr-xr-x 1 manthankhawse manthankhawse 1012 Sep  8 18:58 stringRearrange.sh
+-rwxr-xr-x 1 manthankhawse manthankhawse  102 Sep  8 18:29 sumOfN.sh
+Total number of files: 8
