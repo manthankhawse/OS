@@ -1,96 +1,125 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <pthread.h>
-#include <semaphore.h>
+#include <stdlib.h>
 #include <unistd.h>
+#include <termios.h>
+#include <fcntl.h>
 
-int *buffer;
-int count = 0;
-int buffer_size;
-sem_t empty;          
-sem_t full;           
 pthread_mutex_t mutex;
+pthread_mutex_t rw_mutex;
+int reader_count = 0;
+int reader_num = 1; 
+int writer_num = 1; 
 
+// Function to check for keypress
+int kbhit() {
+    struct termios oldt, newt;
+    int ch;
+    int oldf;
 
-void *producer(void *arg) {
-    int num_produce;
-    printf("Enter number of items to produce: ");
-    scanf("%d", &num_produce);
-    
-    for (int i = 0; i < num_produce; i++) {
-        sem_wait(&empty);
-        pthread_mutex_lock(&mutex); 
-        
-        int item = rand() % 100;  
-        buffer[count++] = item;      
-        printf("Produced: %d | Buffer: ", item);
-        
-        for (int j = 0; j < count; j++) {
-            printf("%d ", buffer[j]);
-        }
-        printf("\n");
-        
-        pthread_mutex_unlock(&mutex); 
-        sem_post(&full);              
-        sleep(1);                     
+    tcgetattr(STDIN_FILENO, &oldt); // Save terminal settings
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON | ECHO); // Disable buffering and echo
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt); // Apply new terminal settings
+    oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
+    fcntl(STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK);
+
+    ch = getchar(); // Check for input
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt); // Restore terminal settings
+    fcntl(STDIN_FILENO, F_SETFL, oldf);
+
+    if (ch != EOF) {
+        ungetc(ch, stdin); // Put character back if read
+        return 1;
     }
-    
+
+    return 0;
+}
+
+void* reader(void* arg) {
+    while (1) {
+        if (kbhit()) break; // Exit on keypress
+
+        pthread_mutex_lock(&mutex);
+        int r_num = reader_num++;
+        pthread_mutex_unlock(&mutex);
+
+        pthread_mutex_lock(&mutex);
+        reader_count++;
+        if (reader_count == 1) {
+            pthread_mutex_lock(&rw_mutex); 
+        }
+        pthread_mutex_unlock(&mutex);
+
+        printf("Reader %d entered the critical section.\n", r_num);
+        sleep(1); 
+        printf("Reader %d left the critical section.\n", r_num);
+
+        pthread_mutex_lock(&mutex);
+        reader_count--;
+        if (reader_count == 0) {
+            pthread_mutex_unlock(&rw_mutex); 
+        }
+        pthread_mutex_unlock(&mutex);
+
+        sleep(1); // Simulate time for next operation
+    }
     return NULL;
 }
 
-void *consumer(void *arg) {
+void* writer(void* arg) {
     while (1) {
-        char choice;
-        printf("Do you want to consume an item? (y/n): ");
-        scanf(" %c", &choice);
-        
-        if (choice == 'y') {
-            sem_wait(&full);          
-            pthread_mutex_lock(&mutex); 
-            
-            int item = buffer[--count];
-            printf("Consumed: %d | Buffer: ", item);
-            
-            for (int j = 0; j < count; j++) {
-                printf("%d ", buffer[j]);
-            }
-            printf("\n");
-            
-            pthread_mutex_unlock(&mutex); 
-            sem_post(&empty);             
-        } else {
-            break; 
-        }
+        if (kbhit()) break; // Exit on keypress
+
+        pthread_mutex_lock(&mutex);
+        int w_num = writer_num++;
+        pthread_mutex_unlock(&mutex);
+
+        pthread_mutex_lock(&rw_mutex);
+
+        printf("Writer %d entered the critical section.\n", w_num);
+        sleep(1); 
+        printf("Writer %d left the critical section.\n", w_num);
+
+        pthread_mutex_unlock(&rw_mutex);
+
+        sleep(1); // Simulate time for next operation
     }
     return NULL;
 }
 
 int main() {
-    pthread_t prod, cons;
-    
-    printf("Enter buffer size: ");
-    scanf("%d", &buffer_size);
-    
-    buffer = (int *)malloc(buffer_size * sizeof(int));
-    if (buffer == NULL) {
-        perror("Failed to allocate buffer");
-        return 1;
+    int readers, writers;
+    printf("Enter number of readers: ");
+    scanf("%d", &readers);
+    printf("Enter number of writers: ");
+    scanf("%d", &writers);
+
+    pthread_t r_threads[readers], w_threads[writers];
+
+    pthread_mutex_init(&mutex, NULL);
+    pthread_mutex_init(&rw_mutex, NULL);
+
+    for (int i = 0; i < readers; i++) {
+        pthread_create(&r_threads[i], NULL, reader, NULL);
     }
 
-    sem_init(&empty, 0, buffer_size); 
-    sem_init(&full, 0, 0);            
-    pthread_mutex_init(&mutex, NULL); 
+    for (int i = 0; i < writers; i++) {
+        pthread_create(&w_threads[i], NULL, writer, NULL);
+    }
 
-    pthread_create(&prod, NULL, producer, NULL);
-    pthread_create(&cons, NULL, consumer, NULL);
+    printf("Press any key to terminate...\n");
 
-    pthread_join(prod, NULL); 
-    pthread_join(cons, NULL); 
+    for (int i = 0; i < readers; i++) {
+        pthread_join(r_threads[i], NULL);
+    }
 
-    sem_destroy(&empty);
-    sem_destroy(&full);
-    pthread_mutex_destroy(&mutex); 
+    for (int i = 0; i < writers; i++) {
+        pthread_join(w_threads[i], NULL);
+    }
 
-    free(buffer); 
+    pthread_mutex_destroy(&mutex);
+    pthread_mutex_destroy(&rw_mutex);
+
     return 0;
 }
